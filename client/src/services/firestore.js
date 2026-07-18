@@ -1,30 +1,24 @@
-// services/firestore.js — All Firestore read/write operations
-// Each user's data is namespaced under users/{uid}/ for security
-import {
-  collection, doc, getDocs, addDoc, updateDoc, deleteDoc,
-  query, where, orderBy, limit, serverTimestamp, setDoc, getDoc
-} from 'firebase/firestore';
+import { collection, doc, getDoc, getDocs, setDoc, updateDoc, query, where, orderBy, limit, addDoc } from 'firebase/firestore';
 import { db } from '../firebase';
 
-// ── Helpers ──────────────────────────────────────────────────────────────────
-const userCol = (uid, col) => collection(db, 'users', uid, col);
-const userDoc = (uid, col, id) => doc(db, 'users', uid, col, id);
+// Helper to get user subcollection
+const userCol = (uid, colName) => collection(db, 'users', uid, colName);
 
-// ── User Profile ──────────────────────────────────────────────────────────────
+// ── Profiles ──────────────────────────────────────────────────────────────────
 export async function getUserProfile(uid) {
-  const snap = await getDoc(doc(db, 'users', uid, 'profile', 'data'));
-  return snap.exists() ? snap.data() : null;
+  const snap = await getDoc(doc(db, 'users', uid));
+  if (snap.exists()) return snap.data();
+  return null;
 }
 
 export async function setUserProfile(uid, data) {
-  await setDoc(doc(db, 'users', uid, 'profile', 'data'), data, { merge: true });
+  return setDoc(doc(db, 'users', uid), data, { merge: true });
 }
 
 // ── Health Data ───────────────────────────────────────────────────────────────
-export async function getHealthData(uid, demoMode, limitNum = 30) {
+export async function getHealthData(uid, limitNum = 30) {
   const q = query(
     userCol(uid, 'health_data'),
-    where('is_demo', '==', demoMode ? 1 : 0),
     orderBy('recorded_at', 'desc'),
     limit(limitNum)
   );
@@ -32,85 +26,62 @@ export async function getHealthData(uid, demoMode, limitNum = 30) {
   return snap.docs.map(d => ({ id: d.id, ...d.data() }));
 }
 
-export async function addHealthData(uid, data) {
-  return addDoc(userCol(uid, 'health_data'), {
-    ...data,
-    created_at: serverTimestamp(),
-  });
+export async function saveHealthData(uid, dateStr, data) {
+  return setDoc(doc(db, 'users', uid, 'health_data', dateStr), data, { merge: true });
 }
 
 // ── Insights ──────────────────────────────────────────────────────────────────
-export async function getLatestInsight(uid, demoMode) {
+export async function getLatestInsight(uid) {
   const q = query(
     userCol(uid, 'insights'),
     where('insight_type', '==', 'daily_nudge'),
-    where('is_demo', '==', demoMode ? 1 : 0),
     orderBy('generated_at', 'desc'),
     limit(1)
   );
   const snap = await getDocs(q);
-  return snap.empty ? null : { id: snap.docs[0].id, ...snap.docs[0].data() };
+  return snap.docs.length ? snap.docs[0].data() : null;
 }
 
 export async function saveInsight(uid, data) {
-  return addDoc(userCol(uid, 'insights'), {
-    ...data,
-    generated_at: serverTimestamp(),
-  });
+  return addDoc(userCol(uid, 'insights'), data);
 }
 
 // ── Chat Messages ─────────────────────────────────────────────────────────────
-export async function getChatHistory(uid, demoMode) {
+export async function getChatHistory(uid, limitNum = 50) {
   const q = query(
     userCol(uid, 'chat_messages'),
-    where('is_demo', '==', demoMode ? 1 : 0),
     orderBy('created_at', 'asc'),
-    limit(50)
+    limit(limitNum)
   );
   const snap = await getDocs(q);
   return snap.docs.map(d => ({ id: d.id, ...d.data() }));
 }
 
-export async function addChatMessage(uid, role, content, demoMode) {
+export async function addChatMessage(uid, role, content) {
   return addDoc(userCol(uid, 'chat_messages'), {
     role, content,
-    is_demo: demoMode ? 1 : 0,
-    created_at: serverTimestamp(),
+    created_at: new Date()
   });
 }
 
-export async function clearChatHistory(uid, demoMode) {
-  const q = query(
-    userCol(uid, 'chat_messages'),
-    where('is_demo', '==', demoMode ? 1 : 0)
-  );
-  const snap = await getDocs(q);
-  const deletes = snap.docs.map(d => deleteDoc(d.ref));
-  return Promise.all(deletes);
+export async function clearChatHistory(uid) {
+  const snap = await getDocs(userCol(uid, 'chat_messages'));
+  // In a real app, do this in batches or server-side. For hackathon, just fire and forget.
+  snap.docs.forEach(d => updateDoc(d.ref, { deleted: true })); 
 }
 
 // ── Goals ─────────────────────────────────────────────────────────────────────
 export async function getGoals(uid) {
-  const q = query(
-    userCol(uid, 'goals'),
-    where('is_active', '==', 1),
-    orderBy('created_at', 'desc')
-  );
-  const snap = await getDocs(q);
+  const snap = await getDocs(query(userCol(uid, 'goals'), orderBy('created_at', 'desc')));
   return snap.docs.map(d => ({ id: d.id, ...d.data() }));
 }
 
 export async function addGoal(uid, data) {
-  return addDoc(userCol(uid, 'goals'), {
-    ...data,
-    streak_days: 0,
-    is_active: 1,
-    created_at: serverTimestamp(),
-  });
+  return addDoc(userCol(uid, 'goals'), { ...data, created_at: new Date() });
 }
 
-export async function deleteGoal(uid, goalId) {
-  return updateDoc(userDoc(uid, 'goals', goalId), { is_active: 0 });
+export async function updateGoal(uid, goalId, data) {
+  return updateDoc(doc(db, 'users', uid, 'goals', goalId), data);
 }
 
 // ── Nudges ────────────────────────────────────────────────────────────────────
@@ -118,21 +89,13 @@ export async function getNudges(uid) {
   const q = query(
     userCol(uid, 'nudges'),
     orderBy('created_at', 'desc'),
-    limit(20)
+    limit(50)
   );
   const snap = await getDocs(q);
   return snap.docs.map(d => ({ id: d.id, ...d.data() }));
 }
 
-export async function addNudge(uid, content, isDemo = false) {
-  return addDoc(userCol(uid, 'nudges'), {
-    content,
-    is_read: 0,
-    is_demo: isDemo ? 1 : 0,
-    created_at: serverTimestamp(),
-  });
-}
-
-export async function markNudgeRead(uid, nudgeId) {
-  return updateDoc(userDoc(uid, 'nudges', nudgeId), { is_read: 1 });
+export async function markNudgesRead(uid) {
+  const snap = await getDocs(query(userCol(uid, 'nudges'), where('is_read', '==', 0)));
+  snap.docs.forEach(d => updateDoc(d.ref, { is_read: 1 }));
 }

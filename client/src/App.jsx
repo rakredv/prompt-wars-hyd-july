@@ -6,7 +6,7 @@ import Auth from './components/Auth';
 import Dashboard from './components/Dashboard';
 import CoachChat from './components/CoachChat';
 import GoalTracker from './components/GoalTracker';
-import HealthSync from './components/HealthSync';
+import ManualEntry from './components/ManualEntry';
 import NudgePanel from './components/NudgePanel';
 
 const NAV_ITEMS = [
@@ -14,7 +14,7 @@ const NAV_ITEMS = [
   { id: 'coach', label: 'AI Coach', icon: '💬' },
   { id: 'goals', label: 'Goals', icon: '🎯' },
   { id: 'nudges', label: 'Nudges', icon: '🔔' },
-  { id: 'health', label: 'Apple Health', icon: '❤️' },
+  { id: 'entry', label: 'Data Entry', icon: '✍️' },
 ];
 
 export default function App() {
@@ -22,7 +22,6 @@ export default function App() {
   const [profile, setProfile] = useState(null);
   const [authChecked, setAuthChecked] = useState(false);
   const [activePage, setActivePage] = useState('dashboard');
-  const [demoMode, setDemoMode] = useState(true);
   const [toast, setToast] = useState(null);
   const [unreadNudges, setUnreadNudges] = useState(0);
 
@@ -38,7 +37,6 @@ export default function App() {
           await setUserProfile(firebaseUser.uid, prof).catch(() => {});
         }
         setProfile(prof);
-        setDemoMode(!!prof.demo_mode);
       } else {
         setUser(null);
         setProfile(null);
@@ -57,15 +55,6 @@ export default function App() {
   const handleLogout = async () => {
     await signOut(auth);
     showToast('Signed out', 'info');
-  };
-
-  const handleModeToggle = async (isDemo) => {
-    setDemoMode(isDemo);
-    setProfile(p => ({ ...p, demo_mode: isDemo ? 1 : 0 }));
-    if (user) {
-      await setUserProfile(user.uid, { demo_mode: isDemo ? 1 : 0 }).catch(() => {});
-    }
-    showToast(isDemo ? '🧪 Demo mode — AI-generated data' : '🍎 Live mode — connect Apple Health', 'info');
   };
 
   if (!authChecked) {
@@ -88,17 +77,17 @@ export default function App() {
     coach: { title: 'AI Coach', subtitle: 'Personalized behavior change coaching' },
     goals: { title: 'Goals', subtitle: 'Track your habit reduction progress' },
     nudges: { title: 'Nudges', subtitle: 'AI-generated moments of awareness' },
-    health: { title: 'Apple Health', subtitle: 'Connect your health data' },
+    entry: { title: 'Data Entry', subtitle: 'Manually log your health metrics' },
   };
 
   const renderPage = () => {
-    const props = { user, demoMode, showToast };
+    const props = { user, showToast };
     switch (activePage) {
       case 'dashboard': return <Dashboard {...props} />;
       case 'coach': return <CoachChat {...props} />;
       case 'goals': return <GoalTracker {...props} />;
       case 'nudges': return <NudgePanel {...props} onRead={() => setUnreadNudges(0)} onUnreadCount={setUnreadNudges} />;
-      case 'health': return <HealthSync {...props} />;
+      case 'entry': return <ManualEntry {...props} />;
       default: return null;
     }
   };
@@ -133,15 +122,7 @@ export default function App() {
         </nav>
 
         <div className="sidebar-footer">
-          <div className="mode-toggle-container">
-            <span className="mode-toggle-label">Data Mode</span>
-            <div className="mode-buttons">
-              <button id="btn-demo-mode" className={`mode-btn ${demoMode ? 'active' : ''}`} onClick={() => handleModeToggle(true)}>🧪 Demo</button>
-              <button id="btn-live-mode" className={`mode-btn ${!demoMode ? 'active' : ''}`} onClick={() => handleModeToggle(false)}>🍎 Live</button>
-            </div>
-            {demoMode && <span className="demo-badge">⚡ AI data</span>}
-          </div>
-          <div style={{ marginTop: 8, padding: '8px 4px', fontSize: '0.75rem', color: 'var(--text-tertiary)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <div style={{ padding: '8px 4px', fontSize: '0.75rem', color: 'var(--text-tertiary)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
             <span>·· {user.email}</span>
             <button id="btn-logout" className="btn btn-ghost btn-sm" onClick={handleLogout} style={{ fontSize: '0.75rem', padding: '4px 8px' }}>Sign out</button>
           </div>
@@ -155,15 +136,6 @@ export default function App() {
             <h1 style={{ fontSize: '1.125rem', margin: 0 }}>{pageInfo[activePage]?.title}</h1>
             <span className="page-subtitle">{pageInfo[activePage]?.subtitle}</span>
           </div>
-          {demoMode && (
-            <div className="demo-badge" style={{ fontSize: '0.75rem', padding: '4px 12px' }}>
-              🧪 Demo Mode —{' '}
-              <button onClick={() => { setActivePage('health'); handleModeToggle(false); }}
-                style={{ background: 'none', border: 'none', color: 'var(--orange)', cursor: 'pointer', fontWeight: 600, fontSize: 'inherit', padding: 0 }}>
-                Connect Apple Health →
-              </button>
-            </div>
-          )}
         </header>
 
         <div className="page-body">{renderPage()}</div>

@@ -78,7 +78,8 @@ export default function CoachChat({ user, demoMode, showToast }) {
       setMessages(prev => [...prev, { id: Date.now(), role: 'assistant', content: data.response, created_at: new Date() }]);
     } catch (e) {
       setIsTyping(false);
-      showToast('Coach unavailable: ' + e.message, 'error');
+      const isNetworkError = e.name === 'TypeError' && e.message.includes('fetch');
+      showToast(isNetworkError ? 'Backend is unreachable. Is your Railway app running?' : 'Coach unavailable: ' + e.message, 'error');
       setMessages(prev => prev.filter(m => m.id !== tempMsg.id));
     } finally {
       setSending(false);
