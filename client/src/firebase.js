@@ -3,6 +3,7 @@
 import { initializeApp } from 'firebase/app';
 import { getAuth } from 'firebase/auth';
 import { getFirestore } from 'firebase/firestore';
+import { getAI, getGenerativeModel, GoogleAIBackend } from 'firebase/ai';
 
 const firebaseConfig = {
   apiKey: "AIzaSyAz7oCzPLuKMexd-UaSooFdyZph7mQn24w",
@@ -17,4 +18,10 @@ const app = initializeApp(firebaseConfig);
 
 export const auth = getAuth(app);
 export const db = getFirestore(app);
+
+// Initialize Gemini backend with API key to bypass Vertex AI App Check requirement
+const ai = getAI(app, { backend: new GoogleAIBackend({ apiKey: import.meta.env.VITE_GEMINI_API_KEY }) });
+
+export const aiModel = getGenerativeModel(ai, { model: 'gemini-2.5-flash' });
+
 export default app;

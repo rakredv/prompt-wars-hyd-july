@@ -1,4 +1,4 @@
-import { collection, doc, getDoc, getDocs, setDoc, updateDoc, query, where, orderBy, limit, addDoc } from 'firebase/firestore';
+import { collection, doc, getDoc, getDocs, setDoc, updateDoc, deleteDoc, query, where, orderBy, limit, addDoc } from 'firebase/firestore';
 import { db } from '../firebase';
 
 // Helper to get user subcollection
@@ -84,6 +84,10 @@ export async function updateGoal(uid, goalId, data) {
   return updateDoc(doc(db, 'users', uid, 'goals', goalId), data);
 }
 
+export async function deleteGoal(uid, goalId) {
+  return deleteDoc(doc(db, 'users', uid, 'goals', goalId));
+}
+
 // ── Nudges ────────────────────────────────────────────────────────────────────
 export async function getNudges(uid) {
   const q = query(
@@ -93,6 +97,10 @@ export async function getNudges(uid) {
   );
   const snap = await getDocs(q);
   return snap.docs.map(d => ({ id: d.id, ...d.data() }));
+}
+
+export async function markNudgeRead(uid, nudgeId) {
+  return updateDoc(doc(db, 'users', uid, 'nudges', nudgeId), { is_read: 1 });
 }
 
 export async function markNudgesRead(uid) {

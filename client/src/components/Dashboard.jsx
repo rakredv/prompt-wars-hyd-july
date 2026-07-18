@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import InsightCard from './InsightCard';
 import { getHealthData, getGoals, getLatestInsight, saveInsight } from '../services/firestore';
-import { API_BASE } from '../config';
+import { aiModel } from '../firebase';
 
 const METRICS = [
   { key: 'screen_time_minutes', label: 'Screen Time', icon: '📱', color: 'var(--red)', good: 'below',
@@ -54,16 +54,29 @@ export default function Dashboard({ user, showToast }) {
 
       const goals = await getGoals(user.uid);
 
-      // Call backend for AI insight
-      const token = await user.getIdToken();
-      const res = await fetch(`${API_BASE}/api/ai/insight`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ healthData: data, goals }),
-      });
+      const summary = data.map((d, i) =>
+        `Day ${i + 1}: Screen ${Math.round((d.screen_time_minutes || 0) / 60 * 10) / 10}h, Steps ${d.steps || 0}, Sleep ${d.sleep_hours || 0}h, Exercise ${d.active_energy_kcal || 0}kcal, Mindful ${d.mindful_minutes || 0}min`
+      ).join('\n');
 
-      if (!res.ok) throw new Error('AI service unavailable');
-      const aiResult = await res.json();
+      const goalSummary = goals.length ? goals.map(g => `${g.habit_type}: ${g.target_value} ${g.target_unit}`).join(', ') : 'No goals set';
+      
+      const prompt = `You are MindYou, an empathetic AI habit coach. Analyze this health data and return a JSON object with: 
+"risk_score" (0-100 integer), 
+"risk_level" ("Low", "Moderate", or "High"), 
+"nudge" (one warm, specific insight sentence), 
+"recommendations" (array of 3 short action items). 
+Be compassionate, never judgmental.
+
+User goals: ${goalSummary}
+Health data:
+${summary}`;
+
+      const result = await aiModel.generateContent(prompt);
+      const text = result.response.text();
+      
+      // Clean up markdown block if present
+      const jsonStr = text.replace(/```json/g, '').replace(/```/g, '').trim();
+      const aiResult = JSON.parse(jsonStr);
 
       // Save to Firestore
       await saveInsight(user.uid, {
@@ -75,8 +88,7 @@ export default function Dashboard({ user, showToast }) {
       setInsight({ content: JSON.stringify(aiResult), risk_score: aiResult.risk_score });
     } catch (e) {
       console.error('Insight error:', e);
-      const isNetworkError = e.name === 'TypeError' && e.message.includes('fetch');
-      showToast(isNetworkError ? 'Cannot connect to backend. Is your Railway app running?' : 'Could not load AI insight: ' + e.message, 'error');
+      showToast('Could not load AI insight: ' + e.message, 'error');
     } finally {
       setLoadingInsight(false);
     }

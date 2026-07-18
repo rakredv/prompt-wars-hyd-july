@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { getChatHistory, addChatMessage, clearChatHistory, getHealthData } from '../services/firestore';
-import { API_BASE } from '../config';
+import { aiModel } from '../firebase';
 
 const WELCOME_MSG = {
   id: 'welcome', role: 'assistant',
@@ -15,7 +15,7 @@ const QUICK_PROMPTS = [
   'Why do I keep picking up my phone?',
 ];
 
-export default function CoachChat({ user, demoMode, showToast }) {
+export default function CoachChat({ user, showToast }) {
   const [messages, setMessages] = useState([WELCOME_MSG]);
   const [input, setInput] = useState('');
   const [sending, setSending] = useState(false);
@@ -26,12 +26,12 @@ export default function CoachChat({ user, demoMode, showToast }) {
   useEffect(() => {
     const load = async () => {
       try {
-        const history = await getChatHistory(user.uid, demoMode);
+        const history = await getChatHistory(user.uid);
         if (history.length > 0) setMessages([WELCOME_MSG, ...history]);
       } catch (e) { console.error('Chat load error:', e); }
     };
     load();
-  }, [user.uid, demoMode]);
+  }, [user.uid]);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -49,37 +49,38 @@ export default function CoachChat({ user, demoMode, showToast }) {
 
     try {
       // Save user message to Firestore
-      await addChatMessage(user.uid, 'user', text, demoMode);
+      await addChatMessage(user.uid, 'user', text);
 
       // Build health summary for context
-      const recentData = await getHealthData(user.uid, demoMode, 3);
+      const recentData = await getHealthData(user.uid, 3);
       const healthSummary = recentData.length
         ? recentData.map(d => `Screen: ${d.screen_time_minutes}min, Steps: ${d.steps}, Sleep: ${d.sleep_hours}h`).join(' | ')
         : 'No health data yet';
 
-      // Get last 10 messages for context
-      const history = messages.slice(-10).map(m => ({ role: m.role, content: m.content }));
+      const systemInstruction = `You are MindYou, a compassionate AI behavior-change coach using motivational interviewing. You help users reduce harmful habits like excessive screen time. Be warm, specific, and empowering. Current health context: ${healthSummary || 'No data available yet'}.`;
+      
+      const contents = messages.slice(-10).filter(m => m.id !== 'welcome').map(m => ({
+        role: m.role === 'assistant' ? 'model' : 'user',
+        parts: [{ text: m.content }]
+      }));
+      contents.push({ role: 'user', parts: [{ text }] });
 
-      // Call backend AI
-      const token = await user.getIdToken();
-      const res = await fetch(`${API_BASE}/api/ai/coach`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ message: text, history, healthSummary }),
+      // Call Gemini directly
+      const chatSession = aiModel.startChat({
+        systemInstruction: { role: 'system', parts: [{ text: systemInstruction }] }
       });
-
-      if (!res.ok) throw new Error('Coach unavailable');
-      const data = await res.json();
+      
+      const result = await chatSession.sendMessage(contents);
+      const responseText = result.response.text();
 
       // Save assistant message to Firestore
-      await addChatMessage(user.uid, 'assistant', data.response, demoMode);
+      await addChatMessage(user.uid, 'assistant', responseText);
 
       setIsTyping(false);
-      setMessages(prev => [...prev, { id: Date.now(), role: 'assistant', content: data.response, created_at: new Date() }]);
+      setMessages(prev => [...prev, { id: Date.now(), role: 'assistant', content: responseText, created_at: new Date() }]);
     } catch (e) {
       setIsTyping(false);
-      const isNetworkError = e.name === 'TypeError' && e.message.includes('fetch');
-      showToast(isNetworkError ? 'Backend is unreachable. Is your Railway app running?' : 'Coach unavailable: ' + e.message, 'error');
+      showToast('Coach unavailable: ' + e.message, 'error');
       setMessages(prev => prev.filter(m => m.id !== tempMsg.id));
     } finally {
       setSending(false);
@@ -89,7 +90,7 @@ export default function CoachChat({ user, demoMode, showToast }) {
 
   const handleClear = async () => {
     if (!confirm('Clear chat history?')) return;
-    await clearChatHistory(user.uid, demoMode);
+    await clearChatHistory(user.uid);
     setMessages([WELCOME_MSG]);
     showToast('Chat cleared', 'info');
   };
