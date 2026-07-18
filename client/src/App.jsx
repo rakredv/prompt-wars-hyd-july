@@ -123,8 +123,8 @@ export default function App() {
 
         <div className="sidebar-footer">
           <div style={{ padding: '8px 4px', fontSize: '0.75rem', color: 'var(--text-tertiary)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-            <span>·· {user.email}</span>
-            <button id="btn-logout" className="btn btn-ghost btn-sm" onClick={handleLogout} style={{ fontSize: '0.75rem', padding: '4px 8px' }}>Sign out</button>
+            <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', marginRight: '8px' }}>{user.email}</span>
+            <button id="btn-logout" className="btn btn-ghost btn-sm" onClick={handleLogout} style={{ fontSize: '0.75rem', padding: '4px 8px', flexShrink: 0 }}>Sign out</button>
           </div>
         </div>
       </aside>
