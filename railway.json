@@ -4,6 +4,7 @@
     "builder": "NIXPACKS"
   },
   "deploy": {
+    "installCommand": "npm install",
     "startCommand": "npm run build && npm start",
     "healthcheckPath": "/api/health",
     "restartPolicyType": "ON_FAILURE",
