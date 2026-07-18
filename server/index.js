@@ -15,8 +15,18 @@ const PORT = process.env.PORT || 3002;
 let firebaseAdminApp;
 if (!getApps().length) {
   if (process.env.FIREBASE_SERVICE_ACCOUNT) {
-    const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
-    firebaseAdminApp = initializeApp({ credential: cert(serviceAccount) });
+    try {
+      // Remove any surrounding quotes if the user accidentally copied them
+      let rawJson = process.env.FIREBASE_SERVICE_ACCOUNT.trim();
+      if (rawJson.startsWith("'") && rawJson.endsWith("'")) rawJson = rawJson.slice(1, -1);
+      
+      const serviceAccount = JSON.parse(rawJson);
+      firebaseAdminApp = initializeApp({ credential: cert(serviceAccount) });
+    } catch (e) {
+      console.error('❌ [Firebase Admin] FATAL: FIREBASE_SERVICE_ACCOUNT environment variable is not valid JSON!');
+      console.error('❌ Error details:', e.message);
+      console.error('❌ Please ensure you pasted the exact contents of the Firebase Service Account JSON file into Railway.');
+    }
   } else {
     // Dev: initialize without credentials — token verification skipped
     try {
