@@ -5,7 +5,7 @@
   },
   "deploy": {
     "installCommand": "npm install",
-    "startCommand": "npm run build && npm start",
+    "startCommand": "npm start",
     "healthcheckPath": "/api/health",
     "restartPolicyType": "ON_FAILURE",
     "restartPolicyMaxRetries": 3
